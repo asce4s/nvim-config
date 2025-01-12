@@ -34,7 +34,7 @@ return {
 				"graphql",
 				"emmet_ls",
 				"prismals",
-				"typescript-language-server",
+				"ts_ls",
 				"pyright",
 			},
 		})
