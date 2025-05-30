@@ -5,7 +5,12 @@ return {
 		--	"hrsh7th/cmp-nvim-lsp",
 		{ "saghen/blink.cmp" },
 		{ "antosha417/nvim-lsp-file-operations", config = true },
-		{ "folke/neodev.nvim", opts = {} },
+		{
+			"folke/neodev.nvim",
+			opts = {
+				library = { plugins = { "nvim-dap-ui" }, types = true },
+			},
+		},
 	},
 	config = function()
 		-- import lspconfig plugin
@@ -19,8 +24,10 @@ return {
 
 		local keymap = vim.keymap -- for conciseness
 
-		vim.api.nvim_create_autocmd("LspAttach", {
-			group = vim.api.nvim_create_augroup("UserLspConfig", {}),
+		local lsp_attach_group = vim.api.nvim_create_augroup("UserLspConfig", { clear = true })
+
+		vim.api.nvim_create_autocmd("LspAttachPost", {
+			group = lsp_attach_group,
 			callback = function(ev)
 				-- Buffer local mappings.
 				-- See `:help vim.lsp.*` for documentation on any of the below functions
@@ -33,8 +40,8 @@ return {
 				opts.desc = "Go to declaration"
 				keymap.set("n", "gD", vim.lsp.buf.declaration, opts) -- go to declaration
 
-				opts.desc = "Show LSP definitions"
-				keymap.set("n", "gd", "<cmd>Telescope lsp_definitions<CR>", opts) -- show lsp definitions
+				opts.desc = "Go to definition"
+				keymap.set("n", "gd", vim.lsp.buf.definition, opts) -- go to definition
 
 				opts.desc = "Show LSP implementations"
 				keymap.set("n", "gi", "<cmd>Telescope lsp_implementations<CR>", opts) -- show lsp implementations
@@ -43,7 +50,10 @@ return {
 				keymap.set("n", "gt", "<cmd>Telescope lsp_type_definitions<CR>", opts) -- show lsp type definitions
 
 				opts.desc = "See available code actions"
-				keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, opts) -- see available code actions, in visual mode will apply to selection
+				keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, opts) -- see available code actions
+
+				opts.desc = "See available code actions for range"
+				keymap.set("v", "<leader>ca", vim.lsp.buf.range_code_action, opts) -- see available code actions for range
 
 				opts.desc = "Smart rename"
 				keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts) -- smart rename
@@ -69,7 +79,7 @@ return {
 		})
 
 		-- used to enable autocompletion (assign to every lsp server config)
-		local capabilities = require("blink.cmp").get_lsp_capabilities() -- Change the Diagnostic symbols in the sign column (gutter)
+		local capabilities = vim.tbl_deep_extend("force", vim.lsp.protocol.make_client_capabilities(), require("blink.cmp").get_lsp_capabilities()) -- Change the Diagnostic symbols in the sign column (gutter)
 		-- (not in youtube nvim video)
 		local signs = { Error = " ", Warn = " ", Hint = "󰠠 ", Info = " " }
 		for type, icon in pairs(signs) do
@@ -77,13 +87,15 @@ return {
 			vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
 		end
 
-		mason_lspconfig.setup_handlers({
-			-- default handler for installed servers
-			function(server_name)
-				lspconfig[server_name].setup({
-					capabilities = capabilities,
-				})
-			end,
+		-- default handler function
+		local function default_handler(server_name)
+			lspconfig[server_name].setup({
+				capabilities = capabilities,
+			})
+		end
+
+		-- specific handlers
+		local handlers = {
 			["svelte"] = function()
 				-- configure svelte server
 				lspconfig["svelte"].setup({
@@ -138,6 +150,17 @@ return {
 						},
 					},
 				})
+			end,
+		}
+
+		mason_lspconfig.setup_handlers({
+			function(server_name)
+				local handler = handlers[server_name]
+				if handler then
+					handler()
+				else
+					default_handler(server_name)
+				end
 			end,
 		})
 	end,
